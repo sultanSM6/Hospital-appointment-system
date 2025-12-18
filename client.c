@@ -1,92 +1,74 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <winsock2.h>
-#include <ws2tcpip.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #pragma comment(lib, "ws2_32.lib")
 
-#define SERVER_IP "127.0.0.1"
-#define SERVER_PORT 8080
-#define BUFFER_SIZE 1024
+void clear_input() {
+    int c; while ((c = getchar()) != '\n' && c != EOF);
+}
 
 int main() {
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        printf("WSAStartup failed\n");
+    WSADATA wsa; WSAStartup(MAKEWORD(2, 2), &wsa);
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(8080);
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        printf("Sunucuya baglanilamadi!\n");
         return 1;
     }
 
-    int client_socket;
-    struct sockaddr_in server_addr;
-    char buffer[BUFFER_SIZE];
-    int read_size;
-
-    client_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (client_socket == INVALID_SOCKET) {
-        printf("Socket creation failed: %d\n", WSAGetLastError());
-        WSACleanup();
-        return 1;
-    }
-
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(SERVER_PORT);
-    server_addr.sin_addr.s_addr = inet_addr(SERVER_IP);
-    if (server_addr.sin_addr.s_addr == INADDR_NONE) {
-        printf("Invalid address\n");
-        closesocket(client_socket);
-        WSACleanup();
-        return 1;
-    }
-
-    if (connect(client_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Connection failed");
-        closesocket(client_socket);
-        WSACleanup();
-        return 1;
-    }
-
-    printf("Connected to the server.\n");
-
-    while ((read_size = recv(client_socket, buffer, BUFFER_SIZE, 0)) > 0) {
-        buffer[read_size] = '\0';
-        printf("%s", buffer);
-        if (strstr(buffer, "Please choose an option:")) {
-            break;
-        }
-    }
+    char buffer[1024];
+    int choice;
 
     while (1) {
-        printf("You: ");
-        fgets(buffer, BUFFER_SIZE, stdin);
-        buffer[strcspn(buffer, "\n")] = '\0';
+        system("cls"); // Ekrani temizle
+        printf("==========================================\n");
+        printf("      DOKTOR RANDEVU SISTEMI             \n");
+        printf("==========================================\n");
+        printf(" 1. Randevulari Goruntule\n");
+        printf(" 2. Randevu Al\n");
+        printf(" 3. Randevu Iptal Et\n");
+        printf(" 4. Cikis\n");
+        printf("------------------------------------------\n");
+        printf("Seciminiz > ");
 
-        if (send(client_socket, buffer, strlen(buffer), 0) < 0) {
-            perror("Message sending failed");
-            break;
-        }
+        if (scanf("%d", &choice) != 1) { clear_input(); continue; }
+        sprintf(buffer, "%d", choice);
+        send(sock, buffer, (int)strlen(buffer), 0);
 
-        read_size = recv(client_socket, buffer, BUFFER_SIZE, 0);
-        if (read_size > 0) {
-            buffer[read_size] = '\0';
-            printf("Server: %s\n", buffer);
-        } else if (read_size == 0) {
-            printf("Server disconnected.\n");
-            break;
+        if (choice == 4) break;
+
+        system("cls"); // Sonuc ekranini temizle
+        if (choice == 2) {
+            // Randevu Alma Akisi
+            recv(sock, buffer, 1024, 0); printf("%s", buffer); // Dr No prompt
+            scanf("%s", buffer); send(sock, buffer, (int)strlen(buffer), 0);
+            
+            recv(sock, buffer, 1024, 0); printf("%s", buffer); // App No prompt
+            scanf("%s", buffer); send(sock, buffer, (int)strlen(buffer), 0);
+
+            int b = recv(sock, buffer, 1024, 0); buffer[b] = '\0';
+            printf("\nSONUC: %s\n", buffer);
+            printf("\n2 saniye icinde menuye donuluyor...");
+            Sleep(2000);
         } else {
-            perror("Message receiving failed");
-            break;
-        }
-
-        if (strcmp(buffer, "4") == 0) {
-            printf("Exiting...\n");
-            break;
+            // Goruntuleme veya Iptal
+            int b = recv(sock, buffer, 1024, 0); buffer[b] = '\0';
+            printf("--- SUNUCU YANITI ---\n\n%s\n", buffer);
+            printf("---------------------\n");
+            printf("\nMenuye donmek icin [ENTER] tusuna basin...");
+            clear_input(); getchar();
         }
     }
 
-    closesocket(client_socket);
+    closesocket(sock);
     WSACleanup();
     return 0;
 }
